@@ -1,2 +1,0 @@
-Inicio do servidor:
-[27/06/2026 - 23h59]: "Oi" foi enviada
