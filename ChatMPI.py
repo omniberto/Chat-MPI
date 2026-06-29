@@ -265,14 +265,14 @@ def sender_thread():
                 break
 
             else:
-                print(f'\n{C_RECEIVED}"{format(feedback_received_server, True)}" foi recebida!{C_REGULAR}', flush = True)
+                print(f'\n{C_RECEIVED}> "{format(feedback_received_server, True)}" foi recebida!{C_REGULAR}', flush = True)
 
                 with mpi_lock:
                     comm.send(feedback_received_server, dest = SERVER, tag = SENDER_RECEIVED_RECEIVED_FEEDBACK) # Envia a confirmação e o feedback de validação para o Server
                     request_receiver_server = comm.irecv(source = SERVER, tag = RECEIVER_RECEIVED) # Atualiza o canal de feedback de recebimento do Receiver
         
         if receiver_read_server and feedback_read_server: # Se recebeu uma confirmação de leitura do Receiver
-            print(f'{C_READ}"{format(feedback_read_server[1], True)}" foi lida em {feedback_read_server[0]}\n{C_REGULAR}', flush = True)
+            print(f'{C_READ}>> "{format(feedback_read_server[1], True)}" foi lida em {feedback_read_server[0]}\n{C_REGULAR}', flush = True)
 
             with mpi_lock:
                 comm.send(feedback_read_server, dest = SERVER, tag = SENDER_RECEIVED_READ_FEEDBACK) # Envia a confirmação e o feedback de validação para o Server
@@ -317,26 +317,23 @@ if size != 3: # Verifica se a quantidade de processos condiz com a esperada
         print(f"{format("Numero de processos nao condizem! Executado com {size}, esperado 3.", True)}", flush = True)
         
 else: # Se for a quantidaded correta
-    if rank == SERVER: # Se for o processo do Server
-        server = Thread(target = server_thread, daemon = True) # Cria uma thread com a função de Server
-        server.start() # Inicia a thread
 
-    elif rank == SENDER: # Se for o processo do Sender
+    if rank == SENDER: # Se for o processo do Sender
         sender = Thread(target = sender_thread, daemon = True) # Cria uma thread com a função de Sender
         sender.start() # Inicia a thread
 
-    elif rank == RECEIVER: # Se for o processo do Receiver
-        receiver = Thread(target = receiver_thread, daemon = True) # Cria uma thread com a função de Receiver
-        receiver.start() # Inicia a thread
-        
     try: # Roda enquanto não há a finalização direta do usuário (ctrl-c)
         with open("messages.txt", 'w+',encoding='utf-8') as msg: # Reinicia o arquivo de mensagens
             msg.write("Inicio das Mensagens:\n")
 
         with open("serverlog.txt", 'w+',encoding='utf-8') as server_log: # Reinicia o log do Server
-            server_log.write(f"Tempos:\nServer: {timer_server}\nSender: {timer_sender}\nReceiver: {timer_receiver}\nInicio do servidor:\n")
+            server_log.write(f"Tempos:\nServer: {round(timer_server, 2)}\nSender: {round(timer_sender, 2)}\nReceiver: {round(timer_receiver, 2)}\nInicio do servidor:\n")
 
         while not terminate: # Mantém o programa rodando enquanto não há necessidade de terminação
+            if rank == SERVER:
+                server_thread()
+            elif rank == RECEIVER:
+                receiver_thread()
             sleep(1)
 
     except KeyboardInterrupt: # Se for interrompido
