@@ -6,7 +6,7 @@ from mpi4py import MPI
 from time import sleep
 from random import randint, random
 from datetime import datetime
-from GATES import *
+from values import *
 from threading import Thread, Lock
 
 # Variável que indica que está em processo de finalização da execução
@@ -44,7 +44,7 @@ def get_time() -> str:
     return datetime.now().strftime("%d/%m/%Y - %Hh%M:%S")
 
 # Thread do Servidor
-def server_thread():
+def server():
     global terminating # Variável de Terminação
     message_queue: list[str] = [] # Mensagens a serem enviadas para o Receiver
     delivered: list[str] = [] # Mensagens entregues ao Receiver
@@ -68,9 +68,9 @@ def server_thread():
             # Se a mensagem for a de finalização
             if message.lower() == 'end0':
                 terminating = True
-
                 with open("serverlog.txt", "a", encoding='utf-8') as server_log:
                     server_log.write(f"[{get_time()}]: Sender pediu finalização da execução ao Servidor\n")
+
                 # Feedback de terminação de execução
                 print(f'{C_ENDING}{format("Terminação do programa solicitada. Esvaziando filas...", invert = True)}{C_REGULAR}', flush = True)
 
@@ -79,6 +79,7 @@ def server_thread():
                     server_log.write(f'[{get_time()}]: "{message}" foi enviada ao Servidor pelo Sender\n')
                 
             message_queue.append(message)
+            
             # Se não estiver finalizando a execução
             if not terminating:
                 with mpi_lock:
@@ -91,10 +92,13 @@ def server_thread():
             with mpi_lock:
                 if len(message_queue) == 1: # Verifica se aquela é a única mensagem no buffer
                     comm.send(message_queue[0], dest = RECEIVER, tag = MESSAGE_TAG_RECEIVER) # Envia ao Receiver se for
+
+                    # Processamento condicional para a missão
                     if message_queue[0] == 'end0':
                         script = f'[{get_time()}]: Requisição de finalização enviada ao Receiver pelo Server\n'
                     else:
                         script = f'[{get_time()}]: "{message}" foi enviada ao Receiver pelo Server\n'
+
                     with open("serverlog.txt", "a", encoding='utf-8') as server_log:
                         server_log.write(script)
 
@@ -107,6 +111,7 @@ def server_thread():
         if receiver_received and feedback_received: # Se o Receiver acusou que uma mensagem foi recebida
             timeout_receiver = 0 # Reseta o contador de timeout
 
+            # Processamento condicional para a missão
             with open("serverlog.txt", "a", encoding = 'utf-8') as server_log:
                 if feedback_received == 'end0':
                     script = f'[{get_time()}]: Requisição de finalização recebida pelo Receiver\n'
@@ -121,10 +126,9 @@ def server_thread():
             if feedback_received != 'end0':
                 with mpi_lock:
                     request_receiver = comm.irecv(source = RECEIVER, tag = RECEIVER_RECEIVED) # Atualiza o canal de feedback de recebidos do Receiver
-                
                     if len(message_queue) > 0: # Verifica se tem mensagens na fila
                         with open("serverlog.txt", "a", encoding='utf-8') as server_log:
-                            if message_queue[0] == 'end0':
+                            if message_queue[0] == 'end0': # Processamento condicional para a missão
                                 script = f'[{get_time()}]: Requisição de finalização enviada ao Receiver pelo Server\n'
                             else:
                                 script = f'[{get_time()}]: "{message_queue[0]}" foi enviada ao Receiver pelo Servidor\n'
@@ -138,7 +142,7 @@ def server_thread():
         if sender_received: # Se o Sender recebeu a confirmação de recebido do Receiver
             if isinstance(feedback_sender_received, str): # Se o feedback recebido foi uma string
                 with open("serverlog.txt", "a", encoding='utf-8') as server_log:
-                    if feedback_sender_received == 'end0':
+                    if feedback_sender_received == 'end0': # Processamento condicional para a missão
                         script = f'[{get_time()}]: Requisição de finalização recebida pelo Sender\n'
                     else:
                         script = f'[{get_time()}]: Confirmação de recebimento de recebimento da mensagem "{feedback_sender_received}" foi enviada ao Servidor pelo Sender\n'
@@ -149,12 +153,11 @@ def server_thread():
             
             if received_feedbacks_queue: # Se tem feedbacks pra serem enviados
                 comm.send(received_feedbacks_queue[0], dest = SENDER, tag = RECEIVER_RECEIVED) # Envia para o Sender
-
                 with mpi_lock:
                     request_sender_received_feedback = comm.irecv(source = SENDER, tag = SENDER_RECEIVED_RECEIVED_FEEDBACK) # Atualiza o canal de feedback de recebido do Sender
 
                 with open("serverlog.txt", "a", encoding='utf-8') as server_log:
-                    if received_feedbacks_queue[0] == 'end0':
+                    if received_feedbacks_queue[0] == 'end0': # Processamento condicional para a missão
                         script = f'[{get_time()}]: Requisição de finalização enviada ao Sender pelo Server\n'
                     else:
                         script = f'[{get_time()}]: Confirmação de recebimento da mensagem "{received_feedbacks_queue[0]}" foi enviada ao Sender pelo Servidor\n'
@@ -203,8 +206,10 @@ def server_thread():
         # Se o programa está em modo de finalização e as filas estão zeradas
         if terminating and len(message_queue) == 0 and len(received_feedbacks_queue) == 0 and len(read_feedbacks_queue) == 0:
             print(f'{C_END}{format("O programa será finalizado!", True)}{C_REGULAR}', flush = True) # Feedback de encerramento
+
             with open("serverlog.txt", "a", encoding='utf-8') as server_log:
                 server_log.write(f'[{get_time()}]: O programa foi finalizado')
+
             global terminate # Mudando a varíavel de finalização para True
             terminate = True
             break
@@ -212,8 +217,7 @@ def server_thread():
         sleep(timer_server) # Tempo de pausa do Server
 
 # Thread do Sender
-def sender_thread():
-    
+def sender():
     data: str = "" # Variável de controle de mensagens
     timeout_server = 0 # Tempo de timeout do servidor, para reenvio de mensagens
     global terminating # Variável global de finalização
@@ -262,7 +266,7 @@ def sender_thread():
                 terminate = True
                 with mpi_lock:
                     comm.send(feedback_received_server, dest = SERVER, tag = SENDER_RECEIVED_RECEIVED_FEEDBACK) # Envia a confirmação e o feedback de terminação segura para o Server
-                break
+                break # Sai do loop
 
             else:
                 print(f'\n{C_RECEIVED}> "{format(feedback_received_server, True)}" foi recebida!{C_REGULAR}', flush = True)
@@ -281,7 +285,7 @@ def sender_thread():
         sleep(timer_sender) # Tempo de pausa do Sender
 
 # Thread do Receiver
-def receiver_thread():
+def receiver():
     with mpi_lock:
         request_sender_server = comm.irecv(source = SERVER, tag = MESSAGE_TAG_RECEIVER) # Canal de recebimento de mensagens do Sender
 
@@ -319,8 +323,8 @@ if size != 3: # Verifica se a quantidade de processos condiz com a esperada
 else: # Se for a quantidaded correta
 
     if rank == SENDER: # Se for o processo do Sender
-        sender = Thread(target = sender_thread, daemon = True) # Cria uma thread com a função de Sender
-        sender.start() # Inicia a thread
+        sender_thread = Thread(target = sender, daemon = True) # Cria uma thread com a função de Sender
+        sender_thread.start() # Inicia a thread
 
     try: # Roda enquanto não há a finalização direta do usuário (ctrl-c)
         with open("messages.txt", 'w+',encoding='utf-8') as msg: # Reinicia o arquivo de mensagens
@@ -328,12 +332,14 @@ else: # Se for a quantidaded correta
 
         with open("serverlog.txt", 'w+',encoding='utf-8') as server_log: # Reinicia o log do Server
             server_log.write(f"Tempos:\nServer: {round(timer_server, 2)}\nSender: {round(timer_sender, 2)}\nReceiver: {round(timer_receiver, 2)}\nInicio do servidor:\n")
+        
+        if rank == SERVER: # Se for o rank do Server, rode o Server
+            server() 
 
-        while not terminate: # Mantém o programa rodando enquanto não há necessidade de terminação
-            if rank == SERVER:
-                server_thread()
-            elif rank == RECEIVER:
-                receiver_thread()
+        elif rank == RECEIVER: # Se for o rank do Receiver, rode o Receiver
+            receiver()
+
+        while not terminate: # Mantém o programa rodando enquanto não há necessidade de terminação (Necessário para a thread)
             sleep(1)
 
     except KeyboardInterrupt: # Se for interrompido
