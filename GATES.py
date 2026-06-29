@@ -13,3 +13,5 @@ SENDER_RECEIVED_READ_FEEDBACK = 9
 C_RECEIVED: str = "\033[92m"
 C_READ: str = "\033[94m"
 C_REGULAR: str = "\033[0m"
+C_ENDING: str = "\033[93m" 
+C_END: str = "\033[91m"
